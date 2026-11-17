@@ -102,18 +102,20 @@ export class HeadView {
     const { d1, h, d2, L } = this.geom;
     const m = this.mat;
     this.root.clear();
+    const hg = this.headGroup = new THREE.Group(); this.root.add(hg);
+    hg.position.set(...(this.ref || [0, 0, 0]));
 
     // --- ползун (неподвижный): квадрат 420×420, уходит от торца M в сторону +Y
     const ram = new THREE.Mesh(new THREE.BoxGeometry(420, 1600, 420), m.ram);
-    ram.position.set(0, 800, 0); this.root.add(ram);
+    ram.position.set(0, 800, 0); hg.add(ram);
     const flange = new THREE.Mesh(cyl(270, 270, 40), m.ring); // фланец на торце (ось цилиндра — Y)
-    flange.position.set(0, -20, 0); this.root.add(flange);
+    flange.position.set(0, -20, 0); hg.add(flange);
 
     // --- точка P (пересечение осей a и b) — сюда вешаем оба корпуса
     const P = this.pivot = new THREE.Vector3(0, -d1, 0);
 
     // 1-й корпус: крутится вокруг Y (ось a). Цилиндр от фланца до косого среза под 45°.
-    const b1 = this.body1 = new THREE.Group(); b1.position.copy(P); this.root.add(b1);
+    const b1 = this.body1 = new THREE.Group(); b1.position.copy(P); hg.add(b1);
     const r1 = 225;
     b1.add(new THREE.Mesh(cutCylinder(r1, 'y', Math.max(d1 - 40, r1 + 15)), m.body1));
     // Кольцо-стык на косой плоскости
@@ -124,8 +126,8 @@ export class HeadView {
     const mark1 = new THREE.Mesh(new THREE.BoxGeometry(60, 90, 30), m.yellow);
     mark1.position.set(0, Math.max(d1 - 120, 40), r1 + 8); b1.add(mark1);
     // Ось a (пунктир вдоль Y)
-    this.root.add(dashedLine(new THREE.Vector3(0, 900, 0), new THREE.Vector3(0, -d1 - 800, 0), 0x52c7ff));
-    const la = label('a', '#52c7ff', 90); la.position.set(0, -d1 - 860, 0); this.root.add(la);
+    hg.add(dashedLine(new THREE.Vector3(0, 900, 0), new THREE.Vector3(0, -d1 - 800, 0), 0x52c7ff));
+    const la = label('a', '#52c7ff', 90); la.position.set(0, -d1 - 860, 0); hg.add(la);
 
     // 2-й корпус: крутится вокруг наклонной оси k (ось b), внутри 1-го корпуса
     const b2 = this.body2 = new THREE.Group(); b1.add(b2);
@@ -181,8 +183,10 @@ export class HeadView {
     }
     const c0 = new THREE.Mesh(new THREE.BoxGeometry(40, 160, 6), m.yellow); // метка C0
     c0.position.set(0, -560, 3); tg.add(c0);
-    const part = new THREE.Mesh(new THREE.BoxGeometry(360, 360, 220), m.part);
-    part.position.z = 110; tg.add(part);
+    const part = this.partMesh = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), m.part); tg.add(part);
+    const edges = this.partEdges = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(1, 1, 1)), new THREE.LineBasicMaterial({ color: 0x9cc8ef }));
+    tg.add(edges);
+    this.setPart(this.partSize || [860, 500, 420]);
     const base = new THREE.Mesh(new THREE.BoxGeometry(1700, 1500, 300), m.ram);
     base.position.set(0, -d1 - h, tableTop - 90 - 150); this.root.add(base);
 
@@ -197,12 +201,60 @@ export class HeadView {
       const l = label(t, cs); l.position.copy(O.clone().add(dir.multiplyScalar(560))); this.root.add(l);
     }
 
+    // Путь инструмента (весь — бледно) и след (пройденное — ярко)
+    this.pathGroup = new THREE.Group(); this.root.add(this.pathGroup);
+    const cap = 400000;
+    const tg2 = new THREE.BufferGeometry();
+    tg2.setAttribute('position', new THREE.BufferAttribute(new Float32Array(cap * 3), 3));
+    tg2.setDrawRange(0, 0);
+    this.trail = new THREE.LineSegments(tg2, new THREE.LineBasicMaterial({ color: 0x3dff8a }));
+    this.trail.frustumCulled = false; this.trail.renderOrder = 4; this.trailN = 0; this.trailCap = cap;
+    this.root.add(this.trail);
+    if (this.pathData) this.setPath(this.pathData.rapid, this.pathData.feed);
+
     this.setTableC(this.tableC || 0);
     this.applyAngles(this.cur.a, this.cur.b);
     this.focus = new THREE.Vector3(0, -d1 - h * 0.5, -(h + d2 + L) * 0.6);
   }
 
   setGeom(g) { this.geom = { ...this.geom, ...g }; this.build(); }
+
+  // Где центр стола (верх) в мире — от него считаем ноль детали
+  tableCenter() { const { d1, h, d2, L } = this.geom; return [0, -d1 - h, -(h + d2 + L) - 420]; }
+  // Ноль детали (G54) = центр заготовки
+  partZero() { const c = this.tableCenter(); return [c[0], c[1], c[2] + this.partSize[2] / 2]; }
+  setPart(size) {
+    this.partSize = size;
+    for (const o of [this.partMesh, this.partEdges]) { o.scale.set(...size); o.position.set(0, 0, size[2] / 2); }
+  }
+  // Положение головы: опорная точка M (торец ползуна)
+  setRef(M) { this.ref = [...M]; if (this.headGroup) this.headGroup.position.set(...M); }
+
+  setPath(rapid, feed) {
+    this.pathData = { rapid, feed };
+    this.pathGroup.clear();
+    const mk = (pairs, mat) => {
+      if (!pairs.length) return;
+      const g = new THREE.BufferGeometry().setFromPoints(pairs.map((p) => new THREE.Vector3(...p)));
+      const l = new THREE.LineSegments(g, mat); l.computeLineDistances && l.computeLineDistances();
+      l.frustumCulled = false; this.pathGroup.add(l);
+    };
+    mk(rapid, new THREE.LineDashedMaterial({ color: 0xffd23f, dashSize: 14, gapSize: 10, transparent: true, opacity: 0.7 }));
+    mk(feed, new THREE.LineBasicMaterial({ color: 0xff8a1f, transparent: true, opacity: 0.55 }));
+  }
+  clearPath() { this.pathData = null; this.pathGroup && this.pathGroup.clear(); this.trailReset(); }
+  trailReset() { this.trailN = 0; this.trail && this.trail.geometry.setDrawRange(0, 0); }
+  trailAdd(p, q) {
+    if (this.trailN + 2 > this.trailCap) return;
+    const a = this.trail.geometry.attributes.position;
+    a.setXYZ(this.trailN++, ...p); a.setXYZ(this.trailN++, ...q);
+    a.needsUpdate = true; this.trail.geometry.setDrawRange(0, this.trailN);
+  }
+  // Навести камеру на деталь
+  focusPart() {
+    const z = this.partZero();
+    this.focus = new THREE.Vector3(z[0], z[1], z[2] + 200);
+  }
   setTableC(c) { this.tableC = c; if (this.table) this.table.rotation.z = c * DEG; }
 
   applyAngles(a, b) {
