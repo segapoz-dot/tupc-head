@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#16191d">
+<title>Голова TUPC</title>
+<style>
+  :root {
+    --bg: #16191d; --panel: #1f2328; --card: #262b31; --line: #343a42;
+    --text: #e8ebee; --muted: #9aa3ad; --accent: #ff8a1f; --accent2: #ffb35c;
+    --ok: #46c46e; --bad: #ff5b4f; --a: #52c7ff; --b: #ff5ad1;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
+    font: 15px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  .app { display: grid; grid-template-columns: 1fr 390px; height: 100vh; height: 100dvh; }
+  .view { position: relative; min-height: 0; overflow: hidden; }
+  .view canvas { display: block; touch-action: none; }
+  .hud { position: absolute; left: 12px; top: 10px; pointer-events: none;
+    background: rgba(18,21,25,.72); border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px;
+    font-variant-numeric: tabular-nums; }
+  .hud .big { font-size: 20px; font-weight: 700; }
+  .hud .ca { color: var(--a); } .hud .cb { color: var(--b); }
+  .hud .small { color: var(--muted); font-size: 13px; }
+  .views { position: absolute; left: 12px; bottom: 12px; display: flex; gap: 6px; flex-wrap: wrap; }
+  .views button { background: rgba(31,35,40,.9); }
+  .hint3d { position: absolute; right: 12px; top: 12px; max-width: 210px; text-align: right; color: var(--muted); font-size: 12px; pointer-events: none;
+    background: rgba(18,21,25,.6); padding: 4px 8px; border-radius: 6px; }
+
+  .panel { background: var(--panel); border-left: 1px solid var(--line); overflow-y: auto; padding: 14px 14px 30px; }
+  h1 { font-size: 17px; margin: 0 0 2px; }
+  .sub { color: var(--muted); font-size: 12.5px; margin-bottom: 12px; }
+  button { font: inherit; color: var(--text); background: var(--card); border: 1px solid var(--line);
+    border-radius: 8px; padding: 7px 11px; cursor: pointer; }
+  button:hover { border-color: #4a525c; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #1a1205; font-weight: 700; }
+  .tabs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; background: var(--bg); padding: 4px; border-radius: 10px; margin-bottom: 12px; }
+  .tabs button { border: 0; background: transparent; padding: 8px 4px; }
+  .tabs button.on { background: var(--card); color: var(--accent2); font-weight: 700; }
+  .tab { display: none; } .tab.on { display: block; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 12px; margin-bottom: 12px; }
+  .row { display: grid; grid-template-columns: 26px 1fr 96px; gap: 8px; align-items: center; margin: 8px 0; }
+  .row b { font-size: 17px; }
+  input[type=number], input[type=text] { width: 100%; font: inherit; color: var(--text); background: var(--bg);
+    border: 1px solid var(--line); border-radius: 7px; padding: 6px 8px; font-variant-numeric: tabular-nums; }
+  input[type=range] { width: 100%; accent-color: var(--accent); }
+  .g3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .g3 label, .lbl { display: block; color: var(--muted); font-size: 12.5px; margin-bottom: 3px; }
+  .presets { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 10px; }
+  .presets button { font-size: 13px; padding: 7px 4px; }
+  .note { color: var(--muted); font-size: 12.5px; margin: 8px 0 0; }
+  .err { color: var(--bad); font-weight: 600; margin-top: 8px; }
+  .sols { display: grid; gap: 6px; margin-top: 10px; }
+  .sols button { text-align: left; font-variant-numeric: tabular-nums; }
+  .sols button.on { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
+  .res .ab { display: flex; gap: 18px; font-size: 22px; font-weight: 800; font-variant-numeric: tabular-nums; }
+  .res .ab .a { color: var(--a); } .res .ab .b { color: var(--b); }
+  .res .vec { font-variant-numeric: tabular-nums; margin-top: 4px; }
+  .res .desc { color: var(--muted); font-size: 13px; margin-top: 2px; }
+  .code { display: grid; grid-template-columns: 1fr auto; gap: 6px; align-items: center; margin-top: 8px; }
+  .code code { font: 12.5px/1.3 ui-monospace, Menlo, Consolas, monospace; background: var(--bg); border: 1px solid var(--line);
+    border-radius: 6px; padding: 6px 8px; overflow-x: auto; white-space: nowrap; }
+  .code button { padding: 5px 9px; font-size: 12.5px; }
+  details summary { cursor: pointer; font-weight: 700; }
+  .out { font-variant-numeric: tabular-nums; background: var(--bg); border-radius: 7px; padding: 7px 9px; margin-top: 6px; font-size: 14px; }
+  .chk { display: flex; gap: 8px; align-items: center; margin: 6px 0 12px; color: var(--muted); }
+  .warn { background: #3a2a12; border: 1px solid #6b4a17; color: #ffd59a; border-radius: 8px; padding: 8px 10px; font-size: 12.5px; }
+
+  @media (max-width: 820px) {
+    .app { grid-template-columns: 1fr; grid-template-rows: 52vh 1fr; grid-template-rows: 52dvh 1fr; }
+    .panel { border-left: 0; border-top: 1px solid var(--line); padding: 12px 12px 40px; }
+    .hint3d { display: none; }
+    .hud .big { font-size: 17px; }
+  }
+</style>
+<script type="importmap">{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js", "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/" } }</script>
+</head>
+<body>
+<div class="app">
+  <div class="view" id="view">
+    <div class="hud">
+      <div class="big"><span class="ca">a <span id="hudA">0.000</span>°</span> &nbsp; <span class="cb">b <span id="hudB">0.000</span>°</span></div>
+      <div class="small" id="hudV">i 0 j 0 k −1</div>
+    </div>
+    <div class="views">
+      <button data-view="3d">3D</button>
+      <button data-view="front">Спереди</button>
+      <button data-view="side">Сбоку</button>
+      <button data-view="top">Сверху</button>
+    </div>
+    <div class="hint3d">мышь: крутить · колесо: ближе/дальше · правая кнопка: двигать</div>
+  </div>
+
+  <div class="panel">
+    <h1>Голова TUPC — FPT TESSEN-TURN</h1>
+    <div class="sub">Sinumerik 840D · 3+2 · углы по мануалу FPT</div>
+
+    <div class="tabs" id="tabs">
+      <button data-tab="ang" class="on">Углы a / b</button>
+      <button data-tab="vec">Вектор</button>
+      <button data-tab="cyc">CYCLE800</button>
+    </div>
+
+    <div class="card">
+      <div class="tab on" id="tab-ang">
+        <div class="row"><b style="color:var(--a)">a</b><input type="range" id="rA" min="0" max="360" step="0.5" value="0"><input type="number" id="nA" step="0.001" value="0"></div>
+        <div class="row"><b style="color:var(--b)">b</b><input type="range" id="rB" min="-180" max="180" step="0.5" value="0"><input type="number" id="nB" step="0.001" value="0"></div>
+        <div class="note">a — 1-й корпус (у ползуна), 0…360°. b — 2-й корпус (наклонный, 45°), −180…+180°. Это то, что пишется в <code>M_20(a,b)</code>.</div>
+        <div class="presets" id="presets">
+          <button data-a="0" data-b="0">Вниз Z−</button>
+          <button data-a="180" data-b="0">Вверх Z+</button>
+          <button data-a="0" data-b="180">Гориз. Y−</button>
+          <button data-a="90" data-b="0">Вбок X−</button>
+          <button data-a="270" data-b="0">Вбок X+</button>
+          <button data-a="294.47" data-b="114.47">45° фронт</button>
+        </div>
+      </div>
+
+      <div class="tab" id="tab-vec">
+        <div class="note" style="margin:0 0 8px">Куда смотрит <b>вершина</b> инструмента. Длина вектора любая — программа сама приведёт к 1.</div>
+        <div class="g3">
+          <div><label>i (X)</label><input type="number" id="vI" step="0.001" value="0"></div>
+          <div><label>j (Y)</label><input type="number" id="vJ" step="0.001" value="0"></div>
+          <div><label>k (Z)</label><input type="number" id="vK" step="0.001" value="-1"></div>
+        </div>
+        <div style="margin-top:10px"><button class="primary" id="goVec">Посчитать</button></div>
+        <div id="vecOut"></div>
+      </div>
+
+      <div class="tab" id="tab-cyc">
+        <div class="note" style="margin:0 0 8px">Режим «ось за осью» (57): поворот вокруг X, потом Y, потом Z — как на экране CYCLE800.</div>
+        <div class="g3">
+          <div><label>Rot X (A)</label><input type="number" id="cA" step="0.001" value="0"></div>
+          <div><label>Rot Y (B)</label><input type="number" id="cB" step="0.001" value="0"></div>
+          <div><label>Rot Z (C)</label><input type="number" id="cC" step="0.001" value="0"></div>
+        </div>
+        <div style="margin-top:10px"><button class="primary" id="goCyc">Посчитать</button></div>
+        <div id="cycOut"></div>
+      </div>
+    </div>
+
+    <label class="chk"><input type="checkbox" id="smooth" checked> плавный поворот (видно, как едут корпуса)</label>
+
+    <div class="card res">
+      <div class="lbl">Положение головы</div>
+      <div class="ab"><span class="a">a = <span id="resA">0</span>°</span><span class="b">b = <span id="resB">0</span>°</span></div>
+      <div class="vec" id="resV"></div>
+      <div class="desc" id="resD"></div>
+      <div class="code"><code id="codeM20"></code><button data-copy="codeM20">копия</button></div>
+      <div class="code"><code id="codeDir"></code><button data-copy="codeDir">копия</button></div>
+      <div class="code"><code id="codeAx"></code><button data-copy="codeAx">копия</button></div>
+      <div class="note">1-я строка — повернуть голову циклом FPT. 2-я — CYCLE800 «прямо» (192, углы корпусов). 3-я — CYCLE800 «ось за осью» (57).</div>
+    </div>
+
+    <div class="card">
+      <details id="geomBox">
+        <summary>Точки и размеры головы</summary>
+        <div class="warn" style="margin-top:10px">Размеры примерные — по рисункам. Точные надо снять со стойки (данные поворота CYCLE800 «TUPC»).</div>
+        <div class="g3" style="margin-top:10px;grid-template-columns:repeat(4,1fr)">
+          <div><label>d1, мм</label><input type="number" id="gD1" step="1"></div>
+          <div><label>h, мм</label><input type="number" id="gH" step="1"></div>
+          <div><label>d2, мм</label><input type="number" id="gD2" step="1"></div>
+          <div><label>L, мм</label><input type="number" id="gL" step="1"></div>
+        </div>
+        <div class="note"><b>d1</b> — от торца ползуна до точки P, где сходятся оси a и b (белая точка).
+          <b>h</b> — насколько ось шпинделя смещена от P: она пересекает ось b в точке S (розовая точка), на h ниже и на h дальше P.
+          <b>d2</b> — от S до торца шпинделя. <b>L</b> — вылет инструмента.</div>
+        <div class="lbl" style="margin-top:10px">Вершина инструмента относительно торца ползуна (X Y Z)</div>
+        <div class="out" id="tipOut"></div>
+        <div class="lbl" style="margin-top:10px">Обратно: где вершина → где должен быть торец ползуна</div>
+        <div class="g3">
+          <div><label>X вершины</label><input type="number" id="tX" value="0"></div>
+          <div><label>Y вершины</label><input type="number" id="tY" value="0"></div>
+          <div><label>Z вершины</label><input type="number" id="tZ" value="0"></div>
+        </div>
+        <div class="out" id="refOut"></div>
+        <div class="lbl" style="margin-top:10px">Стол C (только картинка), °</div>
+        <div class="row" style="grid-template-columns:1fr 96px"><input type="range" id="rC" min="0" max="360" step="1" value="0"><input type="number" id="nC" step="1" value="0"></div>
+      </details>
+    </div>
+
+    <div class="note">Расчёт углов проверен на всех примерах мануала FPT (M_20, таблица направлений, CYCLE800). Голова не может смотреть в Y+ (в сторону ползуна).</div>
+  </div>
+</div>
+<script type="module" src="./app.js"></script>
+</body>
+</html>
