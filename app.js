@@ -245,7 +245,10 @@ function endStep(s) {
 function markLine(line) {
   prg.lineEls.forEach((el, i) => el.classList.toggle('cur', i === line));
   const el = prg.lineEls[line];
-  if (el) { el.scrollIntoView({ block: 'nearest' }); }
+  if (el) { // прокрутить только список строк, не всю панель (чтобы кнопки не уезжали из-под пальца)
+    const box = $('pList'), y = el.getBoundingClientRect().top - box.getBoundingClientRect().top + box.scrollTop;
+    if (y < box.scrollTop || y > box.scrollTop + box.clientHeight - el.offsetHeight) box.scrollTop = y - box.clientHeight / 2;
+  }
   const s = prg.res && prg.res.steps[prg.i - 1];
   const txt = line >= 0 && prg.lineEls[line] ? prg.lineEls[line].textContent.trim() : '';
   let pos = '';
@@ -253,10 +256,15 @@ function markLine(line) {
   $('pNow').textContent = txt ? txt + pos : 'Начало программы';
   $('hudLine').hidden = !txt; $('hudLine').textContent = txt;
 }
-let lastT = performance.now();
-function loop(now) {
-  const dt = Math.min(0.1, (now - lastT) / 1000); lastT = now;
-  if (prg.running && prg.res) {
+// Движение программы. Основной ход — по кадрам браузера (requestAnimationFrame).
+// Телефоны в режиме экономии иногда «усыпляют» кадры, пока экран не трогаешь, —
+// тогда подхватывает запасной таймер: двигает программу и сам перерисовывает 3D.
+let lastT = performance.now(), lastFrame = 0;
+function advance() {
+  const now = performance.now();
+  const dt = Math.max(0, Math.min(0.1, (now - lastT) / 1000)); lastT = now;
+  if (!(prg.running && prg.res)) return;
+  try {
     let left = dt * speedMul();
     while (left > 0 && prg.i < prg.res.steps.length) {
       const s = prg.res.steps[prg.i], D = stepDur(s);
@@ -264,10 +272,13 @@ function loop(now) {
       if (left >= need) { left -= need; finishStep(); }
       else { prg.t += left / D; applyStep(s, prg.t); left = 0; }
     }
-  }
-  requestAnimationFrame(loop);
+  } catch (e) { console.error('Ошибка в ходе программы', e); prg.running = false; $('pPlay').textContent = '▶ Пуск'; }
 }
+function loop() { lastFrame = performance.now(); advance(); requestAnimationFrame(loop); }
 requestAnimationFrame(loop);
+setInterval(() => {
+  if (performance.now() - lastFrame > 150) { advance(); try { view.tick(); } catch (e) {} }
+}, 40);
 
 setHead(0, 0, { animate: false });
 window.__tupc = { K, view, setHead, prg, loadProgram }; // для отладки из консоли
