@@ -67,6 +67,7 @@ function showPoints() {
 const tabs = [...document.querySelectorAll('#tabs button')];
 tabs.forEach((btn) => btn.addEventListener('click', () => {
   tabs.forEach((x) => x.classList.toggle('on', x === btn));
+  document.querySelector('.panel').scrollTop = 0;
   document.querySelectorAll('.tab').forEach((x) => x.classList.toggle('on', x.id === 'tab-' + btn.dataset.tab));
   // Подставить текущее положение в поля вкладки
   const t = K.toolDir(state.a, state.b);
@@ -128,7 +129,24 @@ $('rC').addEventListener('input', () => { $('nC').value = $('rC').value; view.se
 $('nC').addEventListener('change', () => { $('rC').value = $('nC').value; view.setTableC(+$('nC').value || 0); });
 
 // --- кнопки вида и копирования
-document.querySelectorAll('[data-view]').forEach((b) => b.addEventListener('click', () => view.setView(b.dataset.view)));
+// Ракурсы: нажатая клавиша подсвечена, пока модель не покрутили рукой
+function setViewKey(name) {
+  view.setView(name);
+  document.querySelectorAll('[data-view]').forEach((k) => k.setAttribute('aria-pressed', String(k.dataset.view === name)));
+}
+document.querySelectorAll('[data-view]').forEach((b) => b.addEventListener('click', () => setViewKey(b.dataset.view)));
+view.controls.addEventListener('start', () => document.querySelectorAll('[data-view]').forEach((k) => k.setAttribute('aria-pressed', 'false')));
+
+// Кнопка в углу модели: развернуть 3D на весь экран и обратно
+const appEl = document.querySelector('.app');
+function expandModel(on) {
+  appEl.classList.toggle('model-only', on);
+  const t = on ? 'Свернуть модель' : 'Развернуть модель';
+  $('expandView').setAttribute('aria-expanded', String(on));
+  $('expandView').setAttribute('aria-label', t); $('expandView').title = t;
+}
+$('expandView').addEventListener('click', () => expandModel(!appEl.classList.contains('model-only')));
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') expandModel(false); });
 document.querySelectorAll('[data-copy]').forEach((b) => b.addEventListener('click', async () => {
   const text = $(b.dataset.copy).textContent;
   try { await navigator.clipboard.writeText(text); }
@@ -180,7 +198,7 @@ function loadProgram() {
   $('pNow').textContent = `Разобрано: ${moves} перемещений, ${rots} поворотов головы. Жми «Пуск» или «Шаг».`;
   ['pPlay', 'pStep', 'pReset'].forEach((id) => ($(id).disabled = !res.steps.length));
   resetProgram();
-  view.focusPart(); view.setView('3d');
+  view.focusPart(); setViewKey('3d');
 }
 $('pLoad').addEventListener('click', loadProgram);
 

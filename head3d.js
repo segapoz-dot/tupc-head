@@ -26,6 +26,40 @@ function cutCylinder(r, axis, flat, segs = 72) {
 
 function cyl(r1, r2, h, segs = 48) { return new THREE.CylinderGeometry(r1, r2, h, segs); }
 
+// Светлые полосы отражаются в металле, как длинные светильники в цеху (оформление «как SINUMERIK Operate», APK 1.1).
+function studioLight(renderer) {
+  const canvas = document.createElement('canvas');
+  canvas.width = 256; canvas.height = 128;
+  const ctx = canvas.getContext('2d');
+  const sky = ctx.createLinearGradient(0, 0, 0, 128);
+  sky.addColorStop(0, '#e1eaf0'); sky.addColorStop(.46, '#788e9d');
+  sky.addColorStop(.56, '#293742'); sky.addColorStop(1, '#40484b');
+  ctx.fillStyle = sky; ctx.fillRect(0, 0, 256, 128);
+  ctx.fillStyle = '#fff6dc'; ctx.fillRect(28, 29, 63, 13);
+  ctx.fillStyle = '#e3f5ff'; ctx.fillRect(151, 20, 19, 55);
+  const source = new THREE.CanvasTexture(canvas);
+  source.mapping = THREE.EquirectangularReflectionMapping;
+  source.colorSpace = THREE.SRGBColorSpace;
+  const generator = new THREE.PMREMGenerator(renderer);
+  const light = generator.fromEquirectangular(source);
+  source.dispose(); generator.dispose();
+  return light.texture;
+}
+
+// Мягкая тень под станиной — картинкой на полу, без расчёта теней на каждом кадре.
+function shopFloor() {
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = 256;
+  const ctx = canvas.getContext('2d');
+  const shade = ctx.createRadialGradient(128, 128, 19, 128, 128, 127);
+  shade.addColorStop(0, '#788b99'); shade.addColorStop(.21, '#a8b7c0');
+  shade.addColorStop(.5, '#ccd5dd'); shade.addColorStop(1, '#dce3e9');
+  ctx.fillStyle = shade; ctx.fillRect(0, 0, 256, 256);
+  const map = new THREE.CanvasTexture(canvas);
+  map.colorSpace = THREE.SRGBColorSpace;
+  return new THREE.Mesh(new THREE.PlaneGeometry(7400, 7400), new THREE.MeshBasicMaterial({ map, depthWrite: false }));
+}
+
 // Надпись-спрайт (X, Y, Z)
 function label(text, color, size = 110) {
   const c = document.createElement('canvas'); c.width = 128; c.height = 128;
@@ -62,7 +96,9 @@ export class HeadView {
     container.appendChild(r.domElement);
 
     const scene = this.scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x1b1e22);
+    scene.background = new THREE.Color(0xdce3e9);
+    scene.fog = new THREE.FogExp2(0xdce3e9, 0.000115);
+    scene.environment = studioLight(r);
 
     const cam = this.camera = new THREE.PerspectiveCamera(35, 1, 10, 30000);
     cam.up.set(0, 0, 1);
@@ -73,18 +109,19 @@ export class HeadView {
     scene.add(new THREE.HemisphereLight(0xdfe8f0, 0x2a2622, 1.1));
     const d1 = new THREE.DirectionalLight(0xffffff, 1.6); d1.position.set(1500, -2500, 3000); scene.add(d1);
     const d2 = new THREE.DirectionalLight(0xffd9b0, 0.6); d2.position.set(-2500, 1500, 800); scene.add(d2);
+    const rim = new THREE.DirectionalLight(0xd8eeff, 1.15); rim.position.set(-600, 800, 1700); scene.add(rim);
 
     this.mat = {
-      ram: new THREE.MeshStandardMaterial({ color: 0x8c949c, metalness: 0.35, roughness: 0.55 }),
-      body1: new THREE.MeshStandardMaterial({ color: 0xb9bfc6, metalness: 0.4, roughness: 0.45 }),
-      body2: new THREE.MeshStandardMaterial({ color: 0xd2d6db, metalness: 0.4, roughness: 0.4 }),
-      ring: new THREE.MeshStandardMaterial({ color: 0x60666e, metalness: 0.5, roughness: 0.4 }),
-      fin: new THREE.MeshStandardMaterial({ color: 0x9aa1a8, metalness: 0.5, roughness: 0.35 }),
+      ram: new THREE.MeshStandardMaterial({ color: 0x758998, metalness: 0.35, roughness: 0.55 }),
+      body1: new THREE.MeshStandardMaterial({ color: 0xa9beca, metalness: 0.4, roughness: 0.45 }),
+      body2: new THREE.MeshStandardMaterial({ color: 0xe2e8e9, metalness: 0.62, roughness: 0.4 }),
+      ring: new THREE.MeshStandardMaterial({ color: 0x515f6b, metalness: 0.5, roughness: 0.4 }),
+      fin: new THREE.MeshStandardMaterial({ color: 0xc2ccd0, metalness: 0.5, roughness: 0.35 }),
       yellow: new THREE.MeshStandardMaterial({ color: 0xf2c200, metalness: 0.2, roughness: 0.5 }),
-      tool: new THREE.MeshStandardMaterial({ color: 0xff7a1a, metalness: 0.3, roughness: 0.35, emissive: 0x3a1500 }),
+      tool: new THREE.MeshStandardMaterial({ color: 0xff972e, metalness: 0.3, roughness: 0.35, emissive: 0x3a1500 }),
       holder: new THREE.MeshStandardMaterial({ color: 0x3d4248, metalness: 0.6, roughness: 0.35 }),
       table: new THREE.MeshStandardMaterial({ color: 0x5a6068, metalness: 0.3, roughness: 0.6 }),
-      part: new THREE.MeshStandardMaterial({ color: 0x4f7fa8, metalness: 0.2, roughness: 0.6, transparent: true, opacity: 0.85 }),
+      part: new THREE.MeshStandardMaterial({ color: 0x3193ad, metalness: 0.2, roughness: 0.6, transparent: true, opacity: 0.55 }),
     };
 
     this.root = new THREE.Group(); scene.add(this.root);
@@ -184,7 +221,7 @@ export class HeadView {
     const c0 = new THREE.Mesh(new THREE.BoxGeometry(40, 160, 6), m.yellow); // метка C0
     c0.position.set(0, -560, 3); tg.add(c0);
     const part = this.partMesh = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), m.part); tg.add(part);
-    const edges = this.partEdges = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(1, 1, 1)), new THREE.LineBasicMaterial({ color: 0x9cc8ef }));
+    const edges = this.partEdges = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(1, 1, 1)), new THREE.LineBasicMaterial({ color: 0x15536c }));
     tg.add(edges);
     this.setPart(this.partSize || [860, 500, 420]);
     const base = new THREE.Mesh(new THREE.BoxGeometry(1700, 1500, 300), m.ram);
@@ -193,6 +230,9 @@ export class HeadView {
     // Сетка пола и оси станка
     const grid = new THREE.GridHelper(6000, 30, 0x3a4048, 0x2a2f35);
     grid.rotation.x = Math.PI / 2; grid.position.set(0, -d1 - h, tableTop - 400); this.root.add(grid);
+    grid.material.transparent = true; grid.material.opacity = 0.22; grid.material.depthWrite = false;
+    this.floor ??= shopFloor();
+    this.floor.position.copy(grid.position); this.floor.position.z -= 2; this.root.add(this.floor);
     const O = new THREE.Vector3(-1150, -d1 - h - 900, tableTop - 395);
     const axes = [[[1, 0, 0], 0xff4d4d, 'X', '#ff6b6b'], [[0, 1, 0], 0x4dff7a, 'Y', '#5dff8a'], [[0, 0, 1], 0x4d9dff, 'Z', '#6aaeff']];
     for (const [v, c, t, cs] of axes) {
@@ -207,7 +247,7 @@ export class HeadView {
     const tg2 = new THREE.BufferGeometry();
     tg2.setAttribute('position', new THREE.BufferAttribute(new Float32Array(cap * 3), 3));
     tg2.setDrawRange(0, 0);
-    this.trail = new THREE.LineSegments(tg2, new THREE.LineBasicMaterial({ color: 0x3dff8a }));
+    this.trail = new THREE.LineSegments(tg2, new THREE.LineBasicMaterial({ color: 0x087a43 }));
     this.trail.frustumCulled = false; this.trail.renderOrder = 4; this.trailN = 0; this.trailCap = cap;
     this.root.add(this.trail);
     if (this.pathData) this.setPath(this.pathData.rapid, this.pathData.feed);
@@ -239,8 +279,8 @@ export class HeadView {
       const l = new THREE.LineSegments(g, mat); l.computeLineDistances && l.computeLineDistances();
       l.frustumCulled = false; this.pathGroup.add(l);
     };
-    mk(rapid, new THREE.LineDashedMaterial({ color: 0xffd23f, dashSize: 14, gapSize: 10, transparent: true, opacity: 0.7 }));
-    mk(feed, new THREE.LineBasicMaterial({ color: 0xff8a1f, transparent: true, opacity: 0.55 }));
+    mk(rapid, new THREE.LineDashedMaterial({ color: 0xa36d00, dashSize: 14, gapSize: 10, transparent: true, opacity: 0.9 })); // ускоренные — охристый пунктир
+    mk(feed, new THREE.LineBasicMaterial({ color: 0xc34b06, transparent: true, opacity: 0.9 }));                          // рабочие — оранжевый
   }
   clearPath() { this.pathData = null; this.pathGroup && this.pathGroup.clear(); this.trailReset(); }
   trailReset() { this.trailN = 0; this.trail && this.trail.geometry.setDrawRange(0, 0); }
@@ -301,6 +341,8 @@ export class HeadView {
     const w = this.container.clientWidth || 1, h = this.container.clientHeight || 1;
     this.renderer.setSize(w, h, false);
     this.renderer.domElement.style.width = '100%'; this.renderer.domElement.style.height = '100%';
-    this.camera.aspect = w / h; this.camera.updateProjectionMatrix();
+    this.camera.aspect = w / h;
+    this.camera.zoom = 0.9 * Math.min(1, this.camera.aspect / 0.88); // в портрете станок целиком в кадре
+    this.camera.updateProjectionMatrix();
   }
 }
